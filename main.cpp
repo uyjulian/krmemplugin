@@ -365,16 +365,42 @@ inline MH_STATUS MH_CreateHookApiEx(
         pszModule, pszProcName, pDetour, reinterpret_cast<LPVOID*>(ppOriginal));
 }
 
-typedef HMODULE (WINAPI *LOADLIBRARYW)(LPCWSTR);
+typedef HMODULE (WINAPI *LOADLIBRARYA)(LPCSTR);
+static LOADLIBRARYA fpLoadLibraryA = NULL;
 
+static HMODULE WINAPI DetourLoadLibraryA(LPCSTR lpLibFileName)
+{
+	if (strcmp(lpLibFileName, "__krmemplugin_internal__.dll"))
+	{
+		// It might be good to return a loadlibrary to ntdll.dll so that the incremented/deincremented will match.
+		this_ntdll_stub = fpLoadLibraryA("ntdll.dll");
+		return this_ntdll_stub;
+	}
+	return fpLoadLibraryA(lpLibFileName);
+}
+
+typedef DWORD (WINAPI *GETFILEATTRIBUTESA)(LPCSTR);
+static GETFILEATTRIBUTESA fpGetFileAttributesA = NULL;
+
+static DWORD WINAPI DetourGetFileAttributesA(LPCSTR lpFileName)
+{
+	if (strcmp(lpFileName, "__krmemplugin_internal__.dll"))
+	{
+		// Always return this is a file
+		return 0;
+	}
+	return fpGetFileAttributesA(lpFileName);
+}
+
+typedef HMODULE (WINAPI *LOADLIBRARYW)(LPCWSTR);
 static LOADLIBRARYW fpLoadLibraryW = NULL;
 
 static HMODULE WINAPI DetourLoadLibraryW(LPCWSTR lpLibFileName)
 {
-	if (wcsstr(lpLibFileName, TEXT("__krmemplugin_internal__.dll")))
+	if (wcsstr(lpLibFileName, L"__krmemplugin_internal__.dll"))
 	{
 		// It might be good to return a loadlibrary to ntdll.dll so that the incremented/deincremented will match.
-		this_ntdll_stub = fpLoadLibraryW(TEXT("ntdll.dll"));
+		this_ntdll_stub = fpLoadLibraryW(L"ntdll.dll");
 		return this_ntdll_stub;
 	}
 	return fpLoadLibraryW(lpLibFileName);
@@ -385,7 +411,7 @@ static GETFILEATTRIBUTESW fpGetFileAttributesW = NULL;
 
 static DWORD WINAPI DetourGetFileAttributesW(LPCWSTR lpFileName)
 {
-	if (wcsstr(lpFileName, TEXT("__krmemplugin_internal__.dll")))
+	if (wcsstr(lpFileName, L"__krmemplugin_internal__.dll"))
 	{
 		// Always return this is a file
 		return 0;
@@ -569,9 +595,11 @@ V2LinkInternal(iTVPFunctionExporter *exporter)
 	// We need to override GetFileAttributes, GetProcAddress and LoadLibrary.
 	MH_Initialize();
 
-	MH_CreateHookApi(TEXT("kernel32.dll"), "LoadLibraryW", reinterpret_cast<LPVOID>(&DetourLoadLibraryW), reinterpret_cast<LPVOID*>(&fpLoadLibraryW));
-	MH_CreateHookApi(TEXT("kernel32.dll"), "GetFileAttributesW", reinterpret_cast<LPVOID>(&DetourGetFileAttributesW), reinterpret_cast<LPVOID*>(&fpGetFileAttributesW));
-	MH_CreateHookApi(TEXT("kernel32.dll"), "GetProcAddress", reinterpret_cast<LPVOID>(&DetourGetProcAddress), reinterpret_cast<LPVOID*>(&fpGetProcAddress));
+	MH_CreateHookApi(L"kernel32.dll", "LoadLibraryA", reinterpret_cast<LPVOID>(&DetourLoadLibraryA), reinterpret_cast<LPVOID*>(&fpLoadLibraryA));
+	MH_CreateHookApi(L"kernel32.dll", "GetFileAttributesA", reinterpret_cast<LPVOID>(&DetourGetFileAttributesA), reinterpret_cast<LPVOID*>(&fpGetFileAttributesA));
+	MH_CreateHookApi(L"kernel32.dll", "LoadLibraryW", reinterpret_cast<LPVOID>(&DetourLoadLibraryW), reinterpret_cast<LPVOID*>(&fpLoadLibraryW));
+	MH_CreateHookApi(L"kernel32.dll", "GetFileAttributesW", reinterpret_cast<LPVOID>(&DetourGetFileAttributesW), reinterpret_cast<LPVOID*>(&fpGetFileAttributesW));
+	MH_CreateHookApi(L"kernel32.dll", "GetProcAddress", reinterpret_cast<LPVOID>(&DetourGetProcAddress), reinterpret_cast<LPVOID*>(&fpGetProcAddress));
 
 	MH_EnableHook(MH_ALL_HOOKS);
 
@@ -600,7 +628,8 @@ V2LinkInternal(iTVPFunctionExporter *exporter)
 			addMethod(dispatch, TJS_W("link"), new tPluginsLinkMem());
 			addMethod(dispatch, TJS_W("unlink"), new tPluginsUnlinkMem());
 			addMethod(dispatch, TJS_W("getList"), new tPluginsGetListMem());
-			delMethod(dispatch, TJS_W("prepare_kr_mem_plugin"));
+			delMethod(dispatch, TJS_W("prepare_krmemplugin_internal"));
+			delMethod(dispatch, TJS_W("prepare_krmemplugin"));
 			tTJSVariant one = (tTVInteger)1;
 			dispatch->PropSet(TJS_MEMBERENSURE|TJS_IGNOREPROP, TJS_W("krmemplugin_is_ready"), NULL, &one, dispatch);
 		}
@@ -623,7 +652,8 @@ V2Link(iTVPFunctionExporter *exporter)
 		{
 			tTJSVariant zero = (tTVInteger)0;
 			dispatch->PropSet(TJS_MEMBERENSURE|TJS_IGNOREPROP, TJS_W("krmemplugin_is_ready"), NULL, &zero, dispatch);
-			addMethod(dispatch, TJS_W("prepare_kr_mem_plugin"), new tPluginsPrepareKrMemPlugin());
+			addMethod(dispatch, TJS_W("prepare_krmemplugin_internal"), new tPluginsPrepareKrMemPlugin());
+			TVPExecuteScript("global.Plugins.prepare_krmemplugin=function{var old_unlink=global.Plugins.unlink;global.Plugins.prepare_krmemplugin_internal();old_unlink('krmemplugin.dll');};");
 		}
 	}
 
@@ -639,7 +669,8 @@ V2Unlink(void)
 		iTJSDispatch2 *dispatch = varScripts.AsObjectNoAddRef();
 		if (dispatch)
 		{
-			delMethod(dispatch, TJS_W("prepare_kr_mem_plugin"));
+			delMethod(dispatch, TJS_W("prepare_krmemplugin_internal"));
+			delMethod(dispatch, TJS_W("prepare_krmemplugin"));
 		}
 	}
 	this_exporter = NULL;
