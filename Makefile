@@ -1,5 +1,5 @@
 
-SOURCES += tvpsnd.c external/MemoryModule/MemoryModule.c external/minhook/src/buffer.c external/minhook/src/hook.c external/minhook/src/trampoline.c external/minhook/src/hde/hde32.c
+SOURCES += tvpsnd.c external/MemoryModule/MemoryModule.c external/minhook/src/buffer.c external/minhook/src/hook.c external/minhook/src/trampoline.c external/minhook/src/hde/hde32.c external/minhook/src/hde/hde64.c
 SOURCES += main.cpp
 
 INCFLAGS += -Iexternal/MemoryModule -Iexternal/minhook/include -Iexternal/minhook/src

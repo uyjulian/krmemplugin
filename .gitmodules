@@ -1,9 +1,11 @@
 [submodule "external/MemoryModule"]
 	path = external/MemoryModule
 	url = https://github.com/fancycode/MemoryModule.git
+	ignore = dirty
 [submodule "external/minhook"]
 	path = external/minhook
 	url = https://github.com/TsudaKageyu/minhook.git
+	ignore = dirty
 [submodule "external/tp_stubz"]
 	path = external/tp_stubz
-	url = ../tp_stubz
+	url = https://github.com/uyjulian/tp_stubz.git
