@@ -1,7 +1,9 @@
 #include <windows.h>
 #include "tp_stub.h"
 #include "tvpsnd.h"
+#if defined(_M_IX86) || defined(_M_X64) || defined(_M_AMD64)
 #include "MinHook.h"
+#endif
 #include "MemoryModule.h"
 #include <vector>
 #include <algorithm>
@@ -364,6 +366,7 @@ GetModuleInstanceInternal(ITSSModule **out, ITSSStorageProvider *provider, IStre
 }
 
 
+#if defined(_M_IX86) || defined(_M_X64) || defined(_M_AMD64)
 static HMODULE this_ntdll_stub = NULL;
 
 
@@ -448,6 +451,7 @@ static FARPROC WINAPI DetourGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 	return fpGetProcAddress(hModule, lpProcName);
 }
 
+#endif
 
 static void
 addMethod(iTJSDispatch2 *dispatch, const tjs_char *methodName, tTJSDispatch *method)
@@ -607,6 +611,7 @@ V2LinkInternal(iTVPFunctionExporter *exporter)
 	TVPInitImportStub(exporter);
 	this_exporter = exporter;
 
+#if defined(_M_IX86) || defined(_M_X64) || defined(_M_AMD64)
 	// We need GetModuleInstance:
 	// We need to override GetFileAttributes, GetProcAddress and LoadLibrary.
 	MH_Initialize();
@@ -634,6 +639,7 @@ V2LinkInternal(iTVPFunctionExporter *exporter)
 	{
 		return E_FAIL;
 	}
+#endif
 
 	// At this point, we can prepare the TJS interface side by replacing the functions in the Plugins class with our own.
 	{

@@ -1,6 +1,14 @@
 
-SOURCES += tvpsnd.c external/MemoryModule/MemoryModule.c external/minhook/src/buffer.c external/minhook/src/hook.c external/minhook/src/trampoline.c external/minhook/src/hde/hde32.c external/minhook/src/hde/hde64.c
+MEMORYMODULE_SOURCES += external/MemoryModule/MemoryModule.c
+MINHOOK_SOURCES += external/minhook/src/buffer.c external/minhook/src/hook.c external/minhook/src/trampoline.c external/minhook/src/hde/hde32.c external/minhook/src/hde/hde64.c
+
+SOURCES += tvpsnd.c
 SOURCES += main.cpp
+SOURCES += $(MEMORYMODULE_SOURCES)
+
+ifeq (x,x$(findstring arm, $(TARGET_ARCH)))
+SOURCES += $(MINHOOK_SOURCES)
+endif
 
 INCFLAGS += -Iexternal/MemoryModule -Iexternal/minhook/include -Iexternal/minhook/src
 
