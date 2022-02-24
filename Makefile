@@ -1,6 +1,7 @@
 
 MEMORYMODULE_SOURCES += external/MemoryModule/MemoryModule.c
 MINHOOK_SOURCES += external/minhook/src/buffer.c external/minhook/src/hook.c external/minhook/src/trampoline.c external/minhook/src/hde/hde32.c external/minhook/src/hde/hde64.c
+PLTHOOK_SOURCES += external/plthook/plthook_win32.c
 
 SOURCES += main.cpp
 SOURCES += $(MEMORYMODULE_SOURCES)
@@ -9,7 +10,11 @@ ifeq (x,x$(findstring arm, $(TARGET_ARCH)))
 SOURCES += $(MINHOOK_SOURCES)
 endif
 
-INCFLAGS += -Iexternal/MemoryModule -Iexternal/minhook/include -Iexternal/minhook/src
+SOURCES += $(PLTHOOK_SOURCES)
+
+INCFLAGS += -Iexternal/MemoryModule -Iexternal/minhook/include -Iexternal/minhook/src -Iexternal/plthook
+
+LDLIBS += -ldbghelp
 
 PROJECT_BASENAME = krmemplugin
 

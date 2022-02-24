@@ -5,9 +5,12 @@
 #undef MIDL_user_allocate
 #include "tp_stub.h"
 #include "tvpsnd.h"
+#if 0
 #if defined(_M_IX86) || defined(_M_X64) || defined(_M_AMD64)
 #include "MinHook.h"
 #endif
+#endif
+#include "plthook.h"
 #include "MemoryModule.h"
 #include <vector>
 #include <algorithm>
@@ -370,23 +373,7 @@ GetModuleInstanceInternal(ITSSModule **out, ITSSStorageProvider *provider, IStre
 }
 
 
-#if defined(_M_IX86) || defined(_M_X64) || defined(_M_AMD64)
 static HMODULE this_ntdll_stub = NULL;
-
-
-template <typename T>
-inline MH_STATUS MH_CreateHookEx(LPVOID pTarget, LPVOID pDetour, T** ppOriginal)
-{
-    return MH_CreateHook(pTarget, pDetour, reinterpret_cast<LPVOID*>(ppOriginal));
-}
-
-template <typename T>
-inline MH_STATUS MH_CreateHookApiEx(
-    LPCWSTR pszModule, LPCSTR pszProcName, LPVOID pDetour, T** ppOriginal)
-{
-    return MH_CreateHookApi(
-        pszModule, pszProcName, pDetour, reinterpret_cast<LPVOID*>(ppOriginal));
-}
 
 typedef HMODULE (WINAPI *LOADLIBRARYA)(LPCSTR);
 static LOADLIBRARYA fpLoadLibraryA = NULL;
@@ -454,8 +441,6 @@ static FARPROC WINAPI DetourGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 	}
 	return fpGetProcAddress(hModule, lpProcName);
 }
-
-#endif
 
 static void
 addMethod(iTJSDispatch2 *dispatch, const tjs_char *methodName, tTJSDispatch *method)
@@ -615,6 +600,7 @@ V2LinkInternal(iTVPFunctionExporter *exporter)
 	TVPInitImportStub(exporter);
 	this_exporter = exporter;
 
+#if 0
 #if defined(_M_IX86) || defined(_M_X64) || defined(_M_AMD64)
 	// We need GetModuleInstance:
 	// We need to override GetFileAttributes, GetProcAddress and LoadLibrary.
@@ -634,6 +620,33 @@ V2LinkInternal(iTVPFunctionExporter *exporter)
 	MH_DisableHook(MH_ALL_HOOKS);
 
 	MH_Uninitialize();
+#endif
+#endif
+
+	plthook_t *plthook;
+
+	if (plthook_open(&plthook, NULL) != 0)
+	{
+		return E_FAIL;
+	}
+	// Make our IAT changes.
+	plthook_replace(plthook, "LoadLibraryA", reinterpret_cast<LPVOID>(DetourLoadLibraryA), reinterpret_cast<LPVOID*>(&fpLoadLibraryA));
+	plthook_replace(plthook, "GetFileAttributesA", reinterpret_cast<LPVOID>(DetourGetFileAttributesA), reinterpret_cast<LPVOID*>(&fpGetFileAttributesA));
+	plthook_replace(plthook, "LoadLibraryW", reinterpret_cast<LPVOID>(DetourLoadLibraryW), reinterpret_cast<LPVOID*>(&fpLoadLibraryW));
+	plthook_replace(plthook, "GetFileAttributesW", reinterpret_cast<LPVOID>(DetourGetFileAttributesW), reinterpret_cast<LPVOID*>(&fpGetFileAttributesW));
+	plthook_replace(plthook, "GetProcAddress", reinterpret_cast<LPVOID>(DetourGetProcAddress), reinterpret_cast<LPVOID*>(&fpGetProcAddress));
+
+	// Add the stub entry into the plugin list.
+	TVPExecuteScript("global.Plugins.link('__krmemplugin_internal__.dll');");
+
+	// Undo our IAT changes.
+	plthook_replace(plthook, "LoadLibraryA", reinterpret_cast<LPVOID>(fpLoadLibraryA), NULL);
+	plthook_replace(plthook, "GetFileAttributesA", reinterpret_cast<LPVOID>(fpGetFileAttributesA), NULL);
+	plthook_replace(plthook, "LoadLibraryW", reinterpret_cast<LPVOID>(fpLoadLibraryW), NULL);
+	plthook_replace(plthook, "GetFileAttributesW", reinterpret_cast<LPVOID>(fpGetFileAttributesW), NULL);
+	plthook_replace(plthook, "GetProcAddress", reinterpret_cast<LPVOID>(fpGetProcAddress), NULL);
+
+	plthook_close(plthook);
 
 	if (this_ntdll_stub)
 	{
@@ -643,7 +656,6 @@ V2LinkInternal(iTVPFunctionExporter *exporter)
 	{
 		return E_FAIL;
 	}
-#endif
 
 	// At this point, we can prepare the TJS interface side by replacing the functions in the Plugins class with our own.
 	{
