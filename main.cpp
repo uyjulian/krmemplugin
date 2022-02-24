@@ -1,4 +1,8 @@
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#define MIDL_user_allocate MIDL_user_allocate_workaround
+#include <objidl.h>
+#undef MIDL_user_allocate
 #include "tp_stub.h"
 #include "tvpsnd.h"
 #if defined(_M_IX86) || defined(_M_X64) || defined(_M_AMD64)
