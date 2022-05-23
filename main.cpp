@@ -778,17 +778,41 @@ V2Link(iTVPFunctionExporter *exporter)
 	TVPInitImportStub(exporter);
 	this_exporter = exporter;
 
+	ttstr pluginPath = TJS_W("krmemplugin.dll");
 	{
-		tTJSVariant varScripts;
-		TVPExecuteExpression(TJS_W("Plugins"), &varScripts);
-		iTJSDispatch2 *dispatch = varScripts.AsObjectNoAddRef();
-		if (dispatch)
+		WCHAR* modnamebuf = new WCHAR[32768];
+		if (modnamebuf)
 		{
-			tTJSVariant zero = (tTVInteger)0;
-			dispatch->PropSet(TJS_MEMBERENSURE|TJS_IGNOREPROP, TJS_W("krmemplugin_is_ready"), NULL, &zero, dispatch);
-			addMethod(dispatch, TJS_W("prepare_krmemplugin_internal"), new tPluginsPrepareKrMemPlugin());
-			TVPExecuteScript("global.Plugins.prepare_krmemplugin=function{var old_unlink=global.Plugins.unlink;global.Plugins.prepare_krmemplugin_internal();old_unlink('krmemplugin.dll');};");
+			if (this_hmodule)
+			{
+				DWORD ret_len = GetModuleFileNameW(this_hmodule, modnamebuf, 32768);
+				if (ret_len)
+				{
+					pluginPath = modnamebuf;
+				}
+			}
+			delete[] modnamebuf;
 		}
+	}
+
+	{
+		iTJSDispatch2 *global_dispatch = TVPGetScriptDispatch();
+		if (global_dispatch)
+		{
+			tTJSVariant varPlugins;
+			global_dispatch->PropGet(TJS_MEMBERMUSTEXIST, TJS_W("System"), NULL, &varPlugins, global_dispatch);
+			iTJSDispatch2 *dispatch = varPlugins.AsObjectNoAddRef();
+			if (dispatch)
+			{
+				tTJSVariant zero = (tTVInteger)0;
+				dispatch->PropSet(TJS_MEMBERENSURE, TJS_W("krmemplugin_is_ready"), NULL, &zero, dispatch);
+				tTJSVariant varPluginPath = pluginPath;
+				dispatch->PropSet(TJS_MEMBERENSURE, TJS_W("krmemplugin_path"), NULL, &varPluginPath, dispatch);
+				addMethod(dispatch, TJS_W("prepare_krmemplugin_internal"), new tPluginsPrepareKrMemPlugin());
+				TVPExecuteScript("global.Plugins.prepare_krmemplugin=function{var old_unlink=global.Plugins.unlink;global.Plugins.prepare_krmemplugin_internal();old_unlink(global.Storages.extractStorageName(global.Plugins.krmemplugin_path));};");
+			}
+		}
+
 	}
 
 	if (is_tpm)
