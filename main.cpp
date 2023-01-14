@@ -800,7 +800,7 @@ V2Link(iTVPFunctionExporter *exporter)
 		if (global_dispatch)
 		{
 			tTJSVariant varPlugins;
-			global_dispatch->PropGet(TJS_MEMBERMUSTEXIST, TJS_W("System"), NULL, &varPlugins, global_dispatch);
+			global_dispatch->PropGet(TJS_MEMBERMUSTEXIST, TJS_W("Plugins"), NULL, &varPlugins, global_dispatch);
 			iTJSDispatch2 *dispatch = varPlugins.AsObjectNoAddRef();
 			if (dispatch)
 			{
