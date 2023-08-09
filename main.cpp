@@ -442,32 +442,6 @@ static FARPROC WINAPI DetourGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 	return fpGetProcAddress(hModule, lpProcName);
 }
 
-static void
-addMethod(iTJSDispatch2 *dispatch, const tjs_char *methodName, tTJSDispatch *method)
-{
-	tTJSVariant var = tTJSVariant(method);
-	method->Release();
-	dispatch->PropSet(
-		TJS_MEMBERENSURE, // メンバがなかった場合には作成するようにするフラグ
-		methodName, // メンバ名 ( かならず TJS_W( ) で囲む )
-		NULL, // ヒント ( 本来はメンバ名のハッシュ値だが、NULL でもよい )
-		&var, // 登録する値
-		dispatch // コンテキスト
-		);
-}
-
-static void
-delMethod(iTJSDispatch2 *dispatch, const tjs_char *methodName)
-{
-	dispatch->DeleteMember(
-		0, // フラグ ( 0 でよい )
-		methodName, // メンバ名
-		NULL, // ヒント
-		dispatch // コンテキスト
-		);
-}
-
-
 class tPluginsLinkMem : public tTJSDispatch
 {
 protected:
@@ -658,18 +632,37 @@ V2LinkInternal(iTVPFunctionExporter *exporter)
 	}
 
 	// At this point, we can prepare the TJS interface side by replacing the functions in the Plugins class with our own.
+	iTJSDispatch2 *global_dispatch = TVPGetScriptDispatch();
+	if (global_dispatch)
 	{
-		tTJSVariant varScripts;
-		TVPExecuteExpression(TJS_W("Plugins"), &varScripts);
-		iTJSDispatch2 *dispatch = varScripts.AsObjectNoAddRef();
-		if (dispatch) {
-			addMethod(dispatch, TJS_W("link"), new tPluginsLinkMem());
-			addMethod(dispatch, TJS_W("unlink"), new tPluginsUnlinkMem());
-			addMethod(dispatch, TJS_W("getList"), new tPluginsGetListMem());
-			delMethod(dispatch, TJS_W("prepare_krmemplugin_internal"));
-			delMethod(dispatch, TJS_W("prepare_krmemplugin"));
-			tTJSVariant one = (tTVInteger)1;
-			dispatch->PropSet(TJS_MEMBERENSURE|TJS_IGNOREPROP, TJS_W("krmemplugin_is_ready"), NULL, &one, dispatch);
+		tTJSVariant varGlobal(global_dispatch);
+		global_dispatch->Release();
+		tTJSVariantClosure cloGlobal = varGlobal.AsObjectClosureNoAddRef();
+		tTJSVariant varPlugins;
+		cloGlobal.PropGet(0, TJS_W("Plugins"), NULL, &varPlugins, NULL);
+		tTJSVariantClosure cloPlugins = varPlugins.AsObjectClosureNoAddRef();
+		if (cloPlugins.Object)
+		{
+			tTJSVariant tmp;
+			tTJSDispatch *method;
+
+			method = new tPluginsLinkMem();
+			tmp = tTJSVariant(method);
+			method->Release();
+			cloPlugins.PropSet(TJS_MEMBERENSURE, TJS_W("link"), NULL, &tmp, cloPlugins.Object);
+			method = new tPluginsUnlinkMem();
+			tmp = tTJSVariant(method);
+			method->Release();
+			cloPlugins.PropSet(TJS_MEMBERENSURE, TJS_W("unlink"), NULL, &tmp, cloPlugins.Object);
+			method = new tPluginsGetListMem();
+			tmp = tTJSVariant(method);
+			method->Release();
+			cloPlugins.PropSet(TJS_MEMBERENSURE, TJS_W("getList"), NULL, &tmp, cloPlugins.Object);
+
+			cloPlugins.DeleteMember(0, TJS_W("prepare_krmemplugin_internal"), NULL, cloPlugins.Object);
+			cloPlugins.DeleteMember(0, TJS_W("prepare_krmemplugin"), NULL, cloPlugins.Object);
+			tmp = (tTVInteger)1;
+			cloPlugins.PropSet(TJS_MEMBERENSURE|TJS_IGNOREPROP, TJS_W("krmemplugin_is_ready"), NULL, &tmp, cloPlugins.Object);
 		}
 	}
 
@@ -799,16 +792,24 @@ V2Link(iTVPFunctionExporter *exporter)
 		iTJSDispatch2 *global_dispatch = TVPGetScriptDispatch();
 		if (global_dispatch)
 		{
+			tTJSVariant varGlobal(global_dispatch);
+			global_dispatch->Release();
+			tTJSVariantClosure cloGlobal = varGlobal.AsObjectClosureNoAddRef();
 			tTJSVariant varPlugins;
-			global_dispatch->PropGet(TJS_MEMBERMUSTEXIST, TJS_W("Plugins"), NULL, &varPlugins, global_dispatch);
-			iTJSDispatch2 *dispatch = varPlugins.AsObjectNoAddRef();
-			if (dispatch)
+			cloGlobal.PropGet(TJS_MEMBERMUSTEXIST, TJS_W("Plugins"), NULL, &varPlugins, NULL);
+			tTJSVariantClosure cloPlugins = varPlugins.AsObjectClosureNoAddRef();
+			if (cloPlugins.Object)
 			{
-				tTJSVariant zero = (tTVInteger)0;
-				dispatch->PropSet(TJS_MEMBERENSURE, TJS_W("krmemplugin_is_ready"), NULL, &zero, dispatch);
-				tTJSVariant varPluginPath = pluginPath;
-				dispatch->PropSet(TJS_MEMBERENSURE, TJS_W("krmemplugin_path"), NULL, &varPluginPath, dispatch);
-				addMethod(dispatch, TJS_W("prepare_krmemplugin_internal"), new tPluginsPrepareKrMemPlugin());
+				tTJSVariant tmp;
+				tTJSDispatch *method;
+				tmp = (tTVInteger)0;
+				cloPlugins.PropSet(TJS_MEMBERENSURE, TJS_W("krmemplugin_is_ready"), NULL, &tmp, cloPlugins.Object);
+				tmp = pluginPath;
+				cloPlugins.PropSet(TJS_MEMBERENSURE, TJS_W("krmemplugin_path"), NULL, &tmp, cloPlugins.Object);
+				method = new tPluginsPrepareKrMemPlugin();
+				tmp = tTJSVariant(method);
+				method->Release();
+				cloPlugins.PropSet(TJS_MEMBERENSURE, TJS_W("prepare_krmemplugin_internal"), NULL, &tmp, cloPlugins.Object);
 				TVPExecuteScript("global.Plugins.prepare_krmemplugin=function{var old_unlink=global.Plugins.unlink;global.Plugins.prepare_krmemplugin_internal();old_unlink(global.Storages.extractStorageName(global.Plugins.krmemplugin_path));};");
 			}
 		}
@@ -850,14 +851,19 @@ V2Link(iTVPFunctionExporter *exporter)
 EXPORT(HRESULT)
 V2Unlink(void)
 {
+	iTJSDispatch2 *global_dispatch = TVPGetScriptDispatch();
+	if (global_dispatch)
 	{
-		tTJSVariant varScripts;
-		TVPExecuteExpression(TJS_W("Plugins"), &varScripts);
-		iTJSDispatch2 *dispatch = varScripts.AsObjectNoAddRef();
-		if (dispatch)
+		tTJSVariant varGlobal(global_dispatch);
+		global_dispatch->Release();
+		tTJSVariantClosure cloGlobal = varGlobal.AsObjectClosureNoAddRef();
+		tTJSVariant varPlugins;
+		cloGlobal.PropGet(TJS_MEMBERMUSTEXIST, TJS_W("Plugins"), NULL, &varPlugins, NULL);
+		tTJSVariantClosure cloPlugins = varPlugins.AsObjectClosureNoAddRef();
+		if (cloPlugins.Object)
 		{
-			delMethod(dispatch, TJS_W("prepare_krmemplugin_internal"));
-			delMethod(dispatch, TJS_W("prepare_krmemplugin"));
+			cloPlugins.DeleteMember(0, TJS_W("prepare_krmemplugin_internal"), NULL, cloPlugins.Object);
+			cloPlugins.DeleteMember(0, TJS_W("prepare_krmemplugin"), NULL, cloPlugins.Object);
 		}
 	}
 	this_exporter = NULL;
